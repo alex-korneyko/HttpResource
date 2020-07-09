@@ -52,11 +52,19 @@ namespace HttpResource
             webRequest.ContentType = "application/json";
             webRequest.Method = "POST";
             webRequest.Headers.Add(HttpRequestHeader.Authorization, $"Bearer {BearerToken}");
-            
-            using (var streamWriter = new StreamWriter(webRequest.GetRequestStream()))
+
+            try
             {
-                var json = JsonSerializer.Serialize(_requestObject);
-                streamWriter.Write(json);
+                using (var streamWriter = new StreamWriter(webRequest.GetRequestStream()))
+                {
+                    var json = JsonSerializer.Serialize(_requestObject);
+                    streamWriter.Write(json);
+                }
+            }
+            catch (Exception e)
+            {
+                _responseHandler.Invoke(null, HttpStatusCode.ServiceUnavailable);
+                return;
             }
             
             HttpWebResponse webResponse;
