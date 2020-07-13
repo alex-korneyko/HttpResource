@@ -4,51 +4,65 @@ using System.Threading;
 namespace HttpResource
 {
     public delegate void ResponseHandler<T>(T resultObject, HttpStatusCode httpStatusCode);
+
+    public delegate void AuthenticateHandler(AuthenticateResult result);
     
-    public class HttpClient
+    public static class HttpClient
     {
-        public string BearerToken { get; private set; }
-        public bool IsAuthenticated { get; private set; }
-        public string HostUrl { get; set; }
+        public static string BearerToken { get; private set; }
+        public static bool IsAuthenticated { get; private set; }
+        public static string HostUrl { get; set; }
 
-        public HttpClient() { }
-
-        public HttpClient(string hostUrl)
+        public static void Authenticate(string apiUrl, string username, string password)
         {
-            HostUrl = hostUrl;
+            Authenticate(apiUrl, username, password, a => {});
         }
-
-        public bool Authenticate(string apiUrl, string username, string password)
+        
+        public static void Authenticate(string apiUrl, string username, string password, AuthenticateHandler authenticateHandler)
         {
             var requestObject = new {Username = username, Password = password};
-            Post<string>(ValidateUrl(apiUrl), requestObject, (token, statusCode) =>
+            PostAsync<AuthenticateResult>(ValidateUrl(apiUrl), requestObject, (authenticateResult, statusCode) =>
             {
-                if (statusCode != HttpStatusCode.OK || token == "") return;
-                BearerToken = token;
-                IsAuthenticated = true;
+                if (statusCode != HttpStatusCode.OK) return;
+
+                if (authenticateResult.AuthenticateStatusCode == AuthenticateStatusCode.OK)
+                {
+                    BearerToken = authenticateResult.token;
+                    IsAuthenticated = true;
+                }
+                
+                authenticateHandler.Invoke(authenticateResult);
             });
-            
-            return IsAuthenticated;
         }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-        public void Get<T>(string url, ResponseHandler<T> responseHandler) where T : class
+        public static void Get<T>(string url, ResponseHandler<T> responseHandler) where T : class
         {
             var requestHandler = new RequestHandler<T>(ValidateUrl(url), null, responseHandler);
 
             var thread = new Thread(requestHandler.GetRequest);
             thread.Start();
         }
-        
 
-        public void Post<T>(string url, ResponseHandler<T> responseHandler) where T : class
+        public static void Post<T>(string url, ResponseHandler<T> responseHandler) where T : class
         {
-            Post(ValidateUrl(url), new object(), responseHandler);
+            Post(url, new object(), responseHandler);
+        }
+
+        public static void Post<T>(string url, object requestObject, ResponseHandler<T> responseHandler) where T : class
+        {
+            var requestHandler = new RequestHandler<T>(ValidateUrl(url), requestObject, responseHandler) {BearerToken = BearerToken};
+            requestHandler.PostRequest();
+        }
+
+        public static void PostAsync<T>(string url, ResponseHandler<T> responseHandler) where T : class
+        {
+            PostAsync(ValidateUrl(url), new object(), responseHandler);
         }
         
 //----------------------------------------------------------------------------------------------------------------------
-        public void Post<T>(string url, object requestObject, ResponseHandler<T> responseHandler) where T : class
+        public static void PostAsync<T>(string url, object requestObject, ResponseHandler<T> responseHandler) where T : class
         {
             var requestHandler = new RequestHandler<T>(ValidateUrl(url), requestObject, responseHandler) {BearerToken = BearerToken};
 
@@ -56,7 +70,7 @@ namespace HttpResource
             thread.Start();
         }
 
-        private string ValidateUrl(string url)
+        private static string ValidateUrl(string url)
         {
             return url.Contains(HostUrl) ? url : HostUrl + url;
         }

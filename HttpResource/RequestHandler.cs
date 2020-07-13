@@ -61,9 +61,9 @@ namespace HttpResource
                     streamWriter.Write(json);
                 }
             }
-            catch (Exception e)
+            catch (WebException e)
             {
-                _responseHandler.Invoke(null, HttpStatusCode.ServiceUnavailable);
+                _responseHandler.Invoke(null, ((HttpWebResponse)e.Response).StatusCode);
                 return;
             }
             
